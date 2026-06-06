@@ -1,0 +1,29 @@
+# ===== 依赖 / 构建产物（体积大，不入库）=====
+node_modules/
+dist/
+target/
+*.class
+
+# ===== IDE =====
+.idea/
+*.iml
+.vscode/
+*.suo
+*.user
+
+# ===== 日志 / 崩溃文件 =====
+*.log
+hs_err_pid*.log
+replay_pid*.log
+npm-debug.log*
+
+# ===== 系统文件 =====
+Thumbs.db
+.DS_Store
+
+# ===== 本地环境 =====
+.env
+.env.local
+
+# ===== Maven 包装器缓存（可选）=====
+.mvn/wrapper/maven-wrapper.jar
