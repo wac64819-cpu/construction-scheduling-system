@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createPinia } from 'pinia'
 import axios from 'axios'
 
 import SettingView from '../SettingView.vue'
@@ -28,11 +29,14 @@ const BACKEND_SETTINGS = {
   crossoverProbability: 0.85,
 }
 
-const mountView = () => mount(SettingView)
+// 每个用例用全新的 Pinia 实例，避免 store 状态在用例之间串味
+let pinia
+const mountView = () => mount(SettingView, { global: { plugins: [pinia] } })
 
 describe('SettingView 项目配置页', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    pinia = createPinia()
     vi.stubGlobal('alert', vi.fn())
     vi.stubGlobal('confirm', vi.fn(() => true))
   })
@@ -63,7 +67,6 @@ describe('SettingView 项目配置页', () => {
 
     const inputs = wrapper.findAll('.form-group input')
     expect(inputs).toHaveLength(8)
-    // 未在 settings 中出现的展示字段
     expect(wrapper.text()).toContain('Project Configuration')
     // 后端返回 1500，默认值是 1000，断言已被覆盖
     expect(inputs[0].element.value).toBe('1500')
@@ -91,6 +94,7 @@ describe('SettingView 项目配置页', () => {
     expect(payload.settings.indirectCostPerDay).toBe(2000)
     // 其余配置保持不变
     expect(payload.settings.populationSize).toBe(120)
+    expect(window.alert).toHaveBeenCalledWith('Settings saved successfully!')
   })
 
   it('保存请求未返回时，按钮禁用并显示 Saving...', async () => {
@@ -110,17 +114,19 @@ describe('SettingView 项目配置页', () => {
     expect(btn.attributes('disabled')).toBeDefined()
   })
 
-  it('加载失败时提示错误，且不渲染表单', async () => {
+  it('加载失败时渲染错误提示，而不是一直停在 Loading', async () => {
     axios.get.mockRejectedValue(new Error('Network Error'))
 
     const wrapper = mountView()
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith(
-      expect.stringContaining('Failed to load settings')
-    )
+    const errorState = wrapper.find('.error-state')
+    expect(errorState.exists()).toBe(true)
+    expect(errorState.text()).toContain('Failed to load settings')
+    expect(errorState.text()).toContain('Network Error')
+    // 失败后不再显示加载态，也不再渲染表单
+    expect(wrapper.find('.loading').exists()).toBe(false)
     expect(wrapper.find('.settings-grid').exists()).toBe(false)
-    expect(wrapper.find('.loading').exists()).toBe(true)
   })
 
   it('点击 Exit 并确认后跳转到项目列表', async () => {

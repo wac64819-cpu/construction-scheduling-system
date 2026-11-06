@@ -1,69 +1,39 @@
 <script setup>
-import { ref, onMounted } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
-import axios from 'axios';
+import { computed } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { storeToRefs } from 'pinia'
 
-const route = useRoute();
-const router = useRouter();
-const projectId = route.params.projectId;
+import { useProjectStore } from '@/stores/project'
 
-const isLoading = ref(true);
-const isSaving = ref(false);
+const route = useRoute()
+const router = useRouter()
+const projectId = route.params.projectId
 
-// 初始化默认值，防止后端数据缺失
-const settings = ref({
-  indirectCostPerDay: 1000,
-  idleCostPerDay: 200,
-  maxOutsourcingRatio: 0.5,
-  outsourcingCostMultiplier: 1.5,
-  maxEvaluations: 25000,
-  populationSize: 100,
-  mutationProbability: 0.01,
-  crossoverProbability: 0.9
-});
+// 项目数据、配置项与请求状态统一由 store 管理，
+// 与调度看板、结果展示页共享同一份数据，避免重复请求
+const store = useProjectStore()
+const { settings, isLoading, isSaving, error } = storeToRefs(store)
 
-// 完整项目对象
-const project = ref(null);
-
-const loadSettings = async () => {
-  try {
-    const res = await axios.get(`http://localhost:8080/api/projects/${projectId}`);
-    project.value = res.data;
-    
-    // 如果后端有 settings 就覆盖默认值
-    if (res.data.settings) {
-      // 使用 Object.assign 保证响应式
-      Object.assign(settings.value, res.data.settings);
-    }
-    isLoading.value = false;
-  } catch (err) {
-    alert("Failed to load settings: " + err.message);
-  }
-};
+// 把错误信息拼成可直接展示的文案
+const errorMessage = computed(() =>
+  error.value ? `Failed to load settings: ${error.value}` : ''
+)
 
 const saveSettings = async () => {
-  isSaving.value = true;
-  try {
-    // 更新 project 对象中的 settings
-    project.value.settings = settings.value;
-    
-    await axios.put(`http://localhost:8080/api/projects/${projectId}`, project.value);
-    alert("Settings saved successfully!");
-  } catch (err) {
-    alert("Save failed: " + err.message);
-  } finally {
-    isSaving.value = false;
-  }
-};
+  const ok = await store.saveProject(projectId)
+  alert(ok ? 'Settings saved successfully!' : `Save failed: ${error.value}`)
+}
 
 // Exit 逻辑
 const exitProject = () => {
-  if (confirm("Exit without saving?")) {
-    router.push('/projects');
+  if (confirm('Exit without saving?')) {
+    router.push('/projects')
   }
-};
+}
 
-onMounted(loadSettings);
+// 在 setup 阶段直接发起请求，而不是放到 onMounted：
+// 这样 isLoading 在首帧渲染前就已置为 true，避免先闪一下默认值再切换到加载态
+store.loadProject(projectId)
 </script>
 
 <template>
@@ -82,7 +52,7 @@ onMounted(loadSettings);
       </div>
     </div>
 
-    <div class="content-scroll" v-if="!isLoading">
+    <div class="content-scroll" v-if="!isLoading && !error">
       <div class="settings-grid">
         
         <!-- 卡片 1: 成本与资源设置 -->
@@ -164,6 +134,7 @@ onMounted(loadSettings);
       </div>
     </div>
     
+    <div v-else-if="error" class="error-state">{{ errorMessage }}</div>
     <div v-else class="loading">Loading Configuration...</div>
   </div>
 </template>
@@ -223,4 +194,5 @@ onMounted(loadSettings);
 .exit-btn:hover { color: #de350b; border-color: #ffbdad; background-color: #fff0f0; }
 
 .loading { text-align: center; margin-top: 50px; color: #666; }
+.error-state { text-align: center; margin-top: 50px; padding: 20px; color: #de350b; background: #fff0f0; border: 1px solid #ffbdad; border-radius: 4px; max-width: 600px; margin-left: auto; margin-right: auto; }
 </style>
